@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="my">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Voice2Text</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, "Noto Sans Myanmar", sans-serif;
+            background: #f4f7fb;
+            color: #222;
+        }
+
+        .app {
+            max-width: 800px;
+            margin: auto;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            padding: 25px 10px;
+        }
+
+        .logo {
+            font-size: 42px;
+            margin-bottom: 8px;
+        }
+
+        .title {
+            font-size: 30px;
+            font-weight: bold;
+            margin: 0;
+        }
+
+        .subtitle {
+            color: #777;
+            margin-top: 8px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.08);
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 300px;
+            resize: vertical;
+            border: 2px solid #e5e9f0;
+            border-radius: 15px;
+            padding: 18px;
+            font-size: 18px;
+            line-height: 1.8;
+            outline: none;
+            font-family: Arial, "Noto Sans Myanmar", sans-serif;
+        }
+
+        textarea:focus {
+            border-color: #4f7cff;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 15px;
+        }
+
+        button {
+            border: none;
+            border-radius: 12px;
+            padding: 13px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .start {
+            background: #2563eb;
+            color: white;
+        }
+
+        .stop {
+            background: #ef4444;
+            color: white;
+        }
+
+        .copy {
+            background: #10b981;
+            color: white;
+        }
+
+        .clear {
+            background: #e5e7eb;
+            color: #222;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .status {
+            margin-top: 15px;
+            padding: 12px;
+            background: #f3f4f6;
+            border-radius: 10px;
+            text-align: center;
+            color: #555;
+        }
+
+        .mic {
+            display: inline-block;
+            margin-right: 6px;
+        }
+
+        @media (max-width: 600px) {
+            .app {
+                padding: 12px;
+            }
+
+            .title {
+                font-size: 25px;
+            }
+
+            textarea {
+                min-height: 250px;
+                font-size: 17px;
+            }
+
+            button {
+                flex: 1;
+                min-width: 120px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="app">
+
+    <div class="header">
+        <div class="logo">🎙️</div>
+
+        <h1 class="title">Voice2Text</h1>
+
+        <div class="subtitle">
+            အသံကို စာသားအဖြစ် ပြောင်းပေးမယ့် App
+        </div>
+    </div>
+
+    <div class="card">
+
+        <textarea
+            id="text"
+            placeholder="🎤 Start Recording ကိုနှိပ်ပြီး စကားပြောပါ..."
+        ></textarea>
+
+        <div class="controls">
+
+            <button
+                id="startBtn"
+                class="start"
+                onclick="startListening()"
+            >
+                🎙️ Start Recording
+            </button>
+
+            <button
+                id="stopBtn"
+                class="stop"
+                onclick="stopListening()"
+                disabled
+            >
+                ⏹️ Stop
+            </button>
+
+            <button
+                class="copy"
+                onclick="copyText()"
+            >
+                📋 Copy
+            </button>
+
+            <button
+                class="clear"
+                onclick="clearText()"
+            >
+                🗑️ Clear
+            </button>
+
+        </div>
+
+        <div id="status" class="status">
+            Ready — စကားပြောရန် Start Recording ကိုနှိပ်ပါ။
+        </div>
+
+    </div>
+
+</div>
+
+<script>
+
+let recognition;
+
+const textBox = document.getElementById("text");
+const startBtn = document.getElementById("startBtn");
+const stopBtn = document.getElementById("stopBtn");
+const statusBox = document.getElementById("status");
+
+
+/* Browser Speech Recognition */
+
+const SpeechRecognition =
+    window.SpeechRecognition ||
+    window.webkitSpeechRecognition;
+
+
+if (!SpeechRecognition) {
+
+    statusBox.innerText =
+        "❌ ဒီ Browser မှာ Speech Recognition မထောက်ပံ့ပါ။ Google Chrome အသုံးပြုပါ။";
+
+    startBtn.disabled = true;
+
+} else {
+
+    recognition = new SpeechRecognition();
+
+    /*
+        Myanmar language
+    */
+    recognition.lang = "my-MM";
+
+    /*
+        Continue listening
+    */
+    recognition.continuous = true;
+
+    /*
+        Show results while speaking
+    */
+    recognition.interimResults = true;
+
+
+    recognition.onstart = function() {
+
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+
+        statusBox.innerHTML =
+            "🔴 Recording... စကားပြောနေပါပြီ";
+
+    };
+
+
+    recognition.onresult = function(event) {
+
+        let finalText = "";
+        let interimText = "";
+
+        for (
+            let i = event.resultIndex;
+            i < event.results.length;
+            i++
+        ) {
+
+            const transcript =
+                event.results[i][0].transcript;
+
+            if (event.results[i].isFinal) {
+
+                finalText += transcript + " ";
+
+            } else {
+
+                interimText += transcript;
+
+            }
+        }
+
+
+        if (finalText) {
+
+            textBox.value += finalText;
+
+        }
+
+    };
+
+
+    recognition.onerror = function(event) {
+
+        console.log("Speech error:", event.error);
+
+        statusBox.innerText =
+            "⚠️ Error: " + event.error;
+
+    };
+
+
+    recognition.onend = function() {
+
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+
+        statusBox.innerText =
+            "Ready — ထပ်မံစကားပြောနိုင်ပါတယ်။";
+
+    };
+
+}
+
+
+/* Start */
+
+function startListening() {
+
+    if (!recognition) return;
+
+    try {
+
+        recognition.start();
+
+    } catch (error) {
+
+        console.log(error);
+
+    }
+
+}
+
+
+/* Stop */
+
+function stopListening() {
+
+    if (!recognition) return;
+
+    recognition.stop();
+
+}
+
+
+/* Copy */
+
+function copyText() {
+
+    const text = textBox.value;
+
+    if (!text.trim()) {
+
+        alert("စာသားမရှိသေးပါ။");
+
+        return;
+
+    }
+
+    navigator.clipboard.writeText(text)
+        .then(() => {
+
+            statusBox.innerText =
+                "✅ စာသားကို Copy လုပ်ပြီးပါပြီ။";
+
+        })
+        .catch(() => {
+
+            alert("Copy မလုပ်နိုင်ပါ။");
+
+        });
+
+}
+
+
+/* Clear */
+
+function clearText() {
+
+    textBox.value = "";
+
+    statusBox.innerText =
+        "Ready — စကားပြောရန် Start Recording ကိုနှိပ်ပါ။";
+
+}
+
+</script>
+
+</body>
+</html>
